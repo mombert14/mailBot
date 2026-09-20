@@ -1,0 +1,4 @@
+google-api-python-client>=2.120
+google-auth-oauthlib>=1.2
+google-cloud-pubsub>=2.21
+python-dotenv>=1.0
