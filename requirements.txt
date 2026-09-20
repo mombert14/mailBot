@@ -1,4 +1,4 @@
-anthropic>=1.7
+openai>=3.16
 google-api-python-client>=2.120
 google-auth-oauthlib>=1.2
 google-cloud-pubsub>=2.21

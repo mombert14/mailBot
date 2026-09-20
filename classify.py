@@ -11,12 +11,12 @@ import re
 import sys
 from pathlib import Path
 
-import anthropic
+from openai import OpenAI
 
-from config import BASE_DIR
+from config import BASE_DIR  # laddar .env, där OPENAI_API_KEY ligger
 
 CORPUS_DIR = BASE_DIR / "corpus"
-MODEL = "claude-opus-5"
+MODEL = "gpt-4o-mini"
 MAX_BODY = 2000  # tecken av brödtexten som skickas med
 KATEGORIER = ("brus", "läsvärt", "svar")
 
@@ -86,30 +86,32 @@ def summarize(mail: dict) -> str:
     )
 
 
-def ask_claude(client: anthropic.Anthropic, mail: dict) -> dict:
-    response = client.messages.create(
+def ask_model(client: OpenAI, mail: dict) -> dict:
+    response = client.chat.completions.create(
         model=MODEL,
-        max_tokens=2000,
-        system=SYSTEM,
-        output_config={
-            "effort": "low",  # klassificering behöver inte djup eftertanke
-            "format": {"type": "json_schema", "schema": SCHEMA},
+        max_tokens=500,
+        messages=[
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": summarize(mail)},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "bedomning", "strict": True, "schema": SCHEMA},
         },
-        messages=[{"role": "user", "content": summarize(mail)}],
     )
+    choice = response.choices[0]
 
-    if response.stop_reason == "refusal":
+    if choice.message.refusal:
         return {"kategori": "läsvärt", "sakerhet": "låg",
                 "motivering": "Modellen avböjde att bedöma.", "av": "modell"}
 
-    text = next(block.text for block in response.content if block.type == "text")
-    verdict = json.loads(text)
+    verdict = json.loads(choice.message.content)
     verdict["av"] = "modell"
     return verdict
 
 
 def classify(redo: bool) -> None:
-    client = anthropic.Anthropic(max_retries=5)
+    client = OpenAI(max_retries=5)
     files = sorted(CORPUS_DIR.glob("*.json"))
 
     by_rule = by_model = skipped = 0
@@ -123,7 +125,7 @@ def classify(redo: bool) -> None:
         if verdict:
             by_rule += 1
         else:
-            verdict = ask_claude(client, mail)
+            verdict = ask_model(client, mail)
             by_model += 1
             print(f"  {number}/{len(files)}  {verdict['kategori']:8} "
                   f"{mail['subject'][:45]}")

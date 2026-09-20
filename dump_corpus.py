@@ -10,8 +10,6 @@ import json
 import sys
 import time
 
-from googleapiclient.errors import HttpError
-
 from config import BASE_DIR
 from mail import fetch_message
 from watch import gmail_service
@@ -21,24 +19,6 @@ DEFAULT_COUNT = 200
 PAGE_SIZE = 100  # Gmail ger max 100 id:n per anrop
 
 PAUSE = 0.3  # sekunder mellan mail, för att hålla sig under Gmails kvot
-RETRY_STATUSES = {403, 429, 500, 503}
-MAX_ATTEMPTS = 5
-
-
-def fetch_with_retry(gmail, message_id: str) -> dict:
-    """Hämtar ett mail och backar undan om Gmail säger att vi går för fort."""
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            return fetch_message(gmail, message_id)
-        except HttpError as error:
-            last_try = attempt == MAX_ATTEMPTS - 1
-            if error.status_code not in RETRY_STATUSES or last_try:
-                raise
-            wait = 5 * 2**attempt  # 5, 10, 20, 40 sekunder
-            print(f"    kvoten full - väntar {wait}s och försöker igen")
-            time.sleep(wait)
-
-    raise RuntimeError("oåtkomlig")  # för typkontrollens skull
 
 
 def inbox_message_ids(gmail, count: int) -> list[str]:
@@ -92,7 +72,7 @@ def main() -> None:
             skipped += 1
             continue
 
-        mail = fetch_with_retry(gmail, message_id)
+        mail = fetch_message(gmail, message_id)
         mail["state"] = existing_state(path)
         path.write_text(json.dumps(mail, ensure_ascii=False, indent=2), encoding="utf-8")
         saved += 1

@@ -4,10 +4,20 @@ Används både av listen.py (ett mail i taget) och dump_corpus.py (många).
 """
 import base64
 import re
+import time
 from html import unescape
 
+from googleapiclient.errors import HttpError
+
+RETRY_STATUSES = {403, 429, 500, 503}
+MAX_ATTEMPTS = 5
+
 # Headers vi bryr oss om, i gemener eftersom Gmail varierar skrivsättet.
-WANTED_HEADERS = ("from", "to", "subject", "date", "list-unsubscribe")
+WANTED_HEADERS = (
+    "from", "to", "subject", "date", "list-unsubscribe",
+    "list-unsubscribe-post",  # finns den kan avregistrering ske med ett anrop
+    "message-id", "references",  # behövs för att ett svar ska hamna i rätt tråd
+)
 
 
 def decode_part(data: str) -> str:
@@ -63,15 +73,23 @@ def extract_attachments(part: dict, found: list) -> None:
         extract_attachments(sub_part, found)
 
 
-def fetch_message(gmail, message_id: str) -> dict:
-    """Hämtar hela mailet och plockar ut det vi bryr oss om."""
-    message = (
-        gmail.users()
-        .messages()
-        .get(userId="me", id=message_id, format="full")
-        .execute()
-    )
+def execute(request):
+    """Kör ett Gmail-anrop och backar undan om kvoten är full."""
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            return request.execute()
+        except HttpError as error:
+            if error.status_code not in RETRY_STATUSES or attempt == MAX_ATTEMPTS - 1:
+                raise
+            wait = 5 * 2**attempt  # 5, 10, 20, 40 sekunder
+            print(f"    kvoten full - väntar {wait}s och försöker igen")
+            time.sleep(wait)
+
+
+def parse_message(message: dict) -> dict:
+    """Gör om Gmails svar till vår platta post. Inga API-anrop."""
     payload = message["payload"]
+    message_id = message["id"]
 
     headers = {
         header["name"].lower(): header["value"]
@@ -91,7 +109,16 @@ def fetch_message(gmail, message_id: str) -> dict:
         "subject": headers.get("subject", "(inget ämne)"),
         "labels": message.get("labelIds", []),
         "list_unsubscribe": headers.get("list-unsubscribe"),
+        "one_click": "one-click" in headers.get("list-unsubscribe-post", "").lower(),
+        "message_id_header": headers.get("message-id", ""),
+        "references": headers.get("references", ""),
         "attachments": attachments,
         "body": extract_body(payload),
         "state": "",  # fylls i för hand: brus | läsvärt | svar
     }
+
+
+def fetch_message(gmail, message_id: str) -> dict:
+    """Hämtar ett mail och plockar ut det vi bryr oss om."""
+    request = gmail.users().messages().get(userId="me", id=message_id, format="full")
+    return parse_message(execute(request))
