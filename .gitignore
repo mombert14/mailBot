@@ -2,8 +2,8 @@ credentials.json
 token.json
 state.json
 corpus/
-dump_corpus.py
-label.py
+beslut.jsonl
 .env
 .venv/
 __pycache__/
+bot.out

@@ -11,6 +11,9 @@ PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
 TOPIC_ID = os.getenv("PUBSUB_TOPIC", "gmail-notifications")
 SUBSCRIPTION_ID = os.getenv("PUBSUB_SUBSCRIPTION", "gmail-pull")
 
+# Frivillig - utan den skickas inga Discord-notiser.
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK", "")
+
 TOPIC_PATH = f"projects/{PROJECT_ID}/topics/{TOPIC_ID}"
 SUBSCRIPTION_PATH = f"projects/{PROJECT_ID}/subscriptions/{SUBSCRIPTION_ID}"
 

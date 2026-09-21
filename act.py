@@ -4,8 +4,10 @@
     läsvärt  -> ingenting, ligger kvar i inkorgen
     svar     -> ett utkast skapas i tråden
 
-Torrläge är standard. Ingenting i Gmail rörs om inte skarpt läge begärs
-uttryckligen, och ingenting skickas någonsin utan att du tryckt på knappen.
+De tre åtgärderna slås på var för sig, i stigande oåterkallelighet:
+ett utkast kan raderas, papperskorgen töms efter 30 dagar, en avregistrering
+går inte att ta tillbaka. Utan påslagna åtgärder beskrivs bara vad som
+skulle ha hänt. Ett svar hamnar alltid som utkast - ingenting skickas.
 """
 import re
 import urllib.error
@@ -19,6 +21,12 @@ from mail import execute
 
 ALLOWLIST_FILE = BASE_DIR / "never_unsubscribe.txt"
 HTTP_TIMEOUT = 15
+
+# De tre åtgärderna, i stigande oåterkallelighet. Varje får slås på för sig.
+ACTIONS = ("utkast", "sopa", "avreg")
+
+# Bedömningar under den här säkerheten leder aldrig till handling.
+ACT_ON = ("hög",)
 
 
 def never_unsubscribe() -> list[str]:
@@ -39,7 +47,7 @@ def unsubscribe_targets(header: str) -> tuple[str | None, str | None]:
     return (https.group(1) if https else None, mailto.group(1) if mailto else None)
 
 
-def unsubscribe(gmail, mail: dict, dry_run: bool) -> str:
+def unsubscribe(gmail, mail: dict, live: bool) -> str:
     """Försöker avregistrera. Returnerar vad som gjordes, eller varför inte."""
     if not mail["list_unsubscribe"]:
         return "ingen avregistreringslänk"
@@ -53,7 +61,7 @@ def unsubscribe(gmail, mail: dict, dry_run: bool) -> str:
 
     # Ett enda anrop räcker bara när avsändaren stödjer det (RFC 8058).
     if url and mail.get("one_click"):
-        if dry_run:
+        if not live:
             return f"skulle avregistrera via {url[:50]}"
         request = urllib.request.Request(
             url, data=b"List-Unsubscribe=One-Click", method="POST"
@@ -65,7 +73,7 @@ def unsubscribe(gmail, mail: dict, dry_run: bool) -> str:
             return f"avregistrering misslyckades: {error}"
 
     if mailto:
-        if dry_run:
+        if not live:
             return f"skulle mejla {mailto}"
         message = EmailMessage()
         message["To"] = mailto
@@ -82,14 +90,14 @@ def unsubscribe(gmail, mail: dict, dry_run: bool) -> str:
     return "kunde inte tolka avregistreringslänken"
 
 
-def trash(gmail, mail: dict, dry_run: bool) -> str:
-    if dry_run:
+def trash(gmail, mail: dict, live: bool) -> str:
+    if not live:
         return "skulle slängas"
     execute(gmail.users().messages().trash(userId="me", id=mail["id"]))
     return "slängd"
 
 
-def make_draft(gmail, client, mail: dict, dry_run: bool) -> str:
+def make_draft(gmail, client, mail: dict, live: bool) -> str:
     thread = thread_messages(gmail, mail["thread_id"])
     examples = style_examples(gmail, address_of(mail["from"]))
     result = write_draft(client, build_prompt(thread, examples))
@@ -97,18 +105,29 @@ def make_draft(gmail, client, mail: dict, dry_run: bool) -> str:
     print("    " + "\n    ".join(result["utkast"].splitlines()))
     print(f"    ({result['kommentar']})")
 
-    if dry_run:
+    if not live:
         return "skulle sparas som utkast"
     draft_id = save_to_gmail(gmail, mail, result["utkast"])
     return f"utkast sparat ({draft_id})"
 
 
-def handle(gmail, client, mail: dict, category: str, dry_run: bool = True) -> list[str]:
-    """Utför det kategorin innebär. Returnerar en rad per åtgärd."""
+def handle(gmail, client, mail: dict, verdict: dict, allowed: set[str]) -> list[str]:
+    """Utför det kategorin innebär, för de åtgärder som är påslagna.
+
+    allowed innehåller noll eller flera av ACTIONS. Tomt = torrläge, då
+    beskrivs bara vad som skulle ha hänt.
+    """
+    if verdict["sakerhet"] not in ACT_ON:
+        return [f"lämnas orörd - osäker bedömning ({verdict['sakerhet']})"]
+
+    category = verdict["kategori"]
     if category == "brus":
-        return [trash(gmail, mail, dry_run), unsubscribe(gmail, mail, dry_run)]
+        return [
+            trash(gmail, mail, "sopa" in allowed),
+            unsubscribe(gmail, mail, "avreg" in allowed),
+        ]
 
     if category == "svar":
-        return [make_draft(gmail, client, mail, dry_run)]
+        return [make_draft(gmail, client, mail, "utkast" in allowed)]
 
     return ["lämnas i inkorgen"]

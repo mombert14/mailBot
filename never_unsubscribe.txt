@@ -1,6 +1,5 @@
 # Avsändare som får slängas men ALDRIG avregistreras.
-# En rad per avsändare. Matchas som delsträng mot From-headern, gemener.
+# En rad per avsändare, matchas som delsträng mot From-headern, gemener.
+# Exempel:  brainville
 #
-# Förslag utifrån din korpus - avkommentera de du vill skydda:
-# brainville
-# akavia
+# Listan är avsiktligt tom.
