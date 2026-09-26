@@ -189,7 +189,9 @@ def main() -> None:
     gmail = gmail_service(creds)
     client = OpenAI(max_retries=5)
 
-    start_watch(gmail)
+    # Börja alltid från nuet - mail som kom medan boten låg nere rörs inte.
+    watch = start_watch(gmail)
+    save_history_id(watch["historyId"])
     subscriber = pubsub_v1.SubscriberClient(credentials=creds)
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
 
