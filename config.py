@@ -14,6 +14,9 @@ SUBSCRIPTION_ID = os.getenv("PUBSUB_SUBSCRIPTION", "gmail-pull")
 # Frivillig - utan den skickas inga Discord-notiser.
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK", "")
 
+# Din egen adress - mail från den ger ingen Discord-notis.
+MYMAIL = os.getenv("MYMAIL", "")
+
 TOPIC_PATH = f"projects/{PROJECT_ID}/topics/{TOPIC_ID}"
 SUBSCRIPTION_PATH = f"projects/{PROJECT_ID}/subscriptions/{SUBSCRIPTION_ID}"
 

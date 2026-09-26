@@ -115,6 +115,7 @@ def handle_notification(gmail, client, data: dict, allowed: set[str]) -> None:
             print(f"     · {result}")
 
         logbook.record(mail, verdict, results, allowed)
+    
         notify.send(mail, verdict, results)
 
     save_history_id(latest)

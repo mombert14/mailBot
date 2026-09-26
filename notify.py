@@ -10,7 +10,7 @@ import re
 import urllib.error
 import urllib.request
 
-from config import DISCORD_WEBHOOK
+from config import DISCORD_WEBHOOK, MYMAIL
 
 TIMEOUT = 10
 
@@ -35,7 +35,11 @@ def send(mail: dict, verdict: dict, actions: list[str]) -> None:
     if not DISCORD_WEBHOOK or verdict["kategori"] not in NOTIFY_ABOUT:
         return
 
-    body = "\n".join(f"• {action}" for action in actions)
+    # Mail från dig själv (t.ex. bottens egna utkast) ska inte ge någon notis.
+    if MYMAIL and sender_address(mail["from"]).lower() == MYMAIL.lower():
+        return
+
+    body ="\n".join(f"• {action}" for action in actions)
     payload = {
         "embeds": [
             {
